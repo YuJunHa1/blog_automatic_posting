@@ -67,9 +67,6 @@ def search(driver):
     #WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".ant-btn.hover-btn.btn-generate-link")))
 
 
-# 반복문의 반복 횟수, 상위 n개의 상품 가져오기기
-n = 10
-
 def get_link(driver, n): #n개의 상품 링크 가져오기
     links = [] # 상품 링크를 담을 리스트
     action = ActionChains(driver)
@@ -82,39 +79,68 @@ def get_link(driver, n): #n개의 상품 링크 가져오기
         link_button.click()
         #링크 복사 후 리스트에 저장
         WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".ant-btn.lg.shorten-url-controls-main"))).click()
+        time.sleep(1)
         clipboard_text = pyperclip.paste()
-        links.append(clipboard_text)
+        if(clipboard_text[:4] == "http"):
+            links.append(clipboard_text)
         driver.back()
-    print("#####################################################")
-    print(links)
-    print("#####################################################")
-    print("끝!!!!")
     return links
 
 
+
 #링크 타고 들어가서 대표 이미지와 베스트 리뷰 가져오기
-def get_img_review(driver, links):
-    title_imgs = []
+def get_img_review_title(driver, links):
+    img_srcs = []
     best_reviews = []
+    titles = []
     for link in links:
         driver.get(link)
         WebDriverWait(driver, 10).until(EC.presence_of_element_located(
         (By.CSS_SELECTOR, '.rds-button.rds-button--lg.rds-button--fill-blue-normal.rds-button--block.main-product_action__XSlcT'))).click()
-        best_review = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.CSS_SELECTOR, ".ProductReview_review__article__reviews__text__article__FveJz"))
+        #베스트 리뷰 가져오기기
+        img_src = get_img(driver)
+        img_srcs.append(img_src)
+        best_review = get_review(driver)
+        best_reviews.append(best_review)
+        title = get_title(driver)
+        titles.append(title)
+        print(img_srcs)
+        print(best_reviews)
+        print(titles)
+    return img_srcs, best_reviews, titles
+
+def get_img(driver):
+    
+    try:
+        img_src = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, ".rds-img img"))
         )
-        print(best_review.text)
-        best_reviews.append(best_review.text)
-    return best_reviews
+        return img_src.get_attribute("src")
+    except Exception as e:
+            print(f"오류 발생: {e}")
+            return None
+
+def get_review(driver):
+    best_review = WebDriverWait(driver, 10).until(
+    EC.presence_of_element_located((By.CSS_SELECTOR, ".ProductReview_review__article__reviews__text__article__FveJz"))
+    )
+    return best_review.text
+
+def get_title(driver):
+    title = WebDriverWait(driver, 10).until(
+    EC.presence_of_element_located((By.CSS_SELECTOR, ".ProductInfo_title__fLscZ"))
+    )
+    return title.text
 
     
 
 
 
 #링크, 이미지 경로, 리뷰 엑셀에 저장하기
-def save_xl(links, best_reviews):
+def save_xl(links, img_srcs, best_reviews, titles):
+    print("save_xl실행!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1")
     # 엑셀 파일 경로
-    file_path = "C:\\blog_automate\\blog_automate.xlsx"
+    file_path = "C:\\blog_automatic_posting\\blog_automatic_posting.xlsx"
 
     if os.path.exists(file_path):     # 파일이 존재하는지 확인
         wb = load_workbook(file_path) # 파일이 존재하면 열기
@@ -127,14 +153,35 @@ def save_xl(links, best_reviews):
     ws.cell(row=1, column=1, value="item_link")
     ws.cell(row=1, column=2, value="img_path")
     ws.cell(row=1, column=3, value="best_review")
+    ws.cell(row=1, column=4, value="title")
 
-    #2행부터 각 속성에 맞는 값 채우기기
-    for i in range(2, ws.max_row+1):
-        ws.cell(row=i, column=1, value=links[i-2])
-        #ws.cell(row=i, column=2, value=title_imgs[i-2])
-        ws.cell(row=i, column=3, value=best_reviews[i-2])
+    #2행부터 각 속성에 맞는 값 채우기
+    for i in range(len(links)):
+        ws.cell(row=i+2, column=1, value=links[i])
+        ws.cell(row=i+2, column=2, value=img_srcs[i])
+        ws.cell(row=i+2, column=3, value=best_reviews[i])
+        ws.cell(row=i+2, column=4, value=titles[i])
+
+    #중복값 제거
+    seen = set()
+    rows_to_delete = []
+
+    # 2번째 행부터 데이터 확인 (1번째 행은 헤더)
+    for row in range(4, ws.max_row + 1):
+        titles = ws.cell(row=row, column=1).value  # item_link 컬럼 값 가져오기
+
+        if titles in seen:  # 이미 존재하면 삭제 리스트에 추가
+            rows_to_delete.append(row)
+        else:
+            seen.add(titles)  # 처음 등장하는 값은 저장
+
+    # 중복 행 삭제 (뒤에서부터 삭제해야 인덱스가 틀어지지 않음)
+    for row in reversed(rows_to_delete):
+        ws.delete_rows(row)
+
     #저장
-    wb.save("C:\\blog_automate\\blog_automate.xlsx")
+    wb.save(file_path)
+    wb.close()
 
 
 if __name__ == "__main__":
@@ -142,6 +189,6 @@ if __name__ == "__main__":
     login(driver)
     search(driver)
     links = get_link(driver, 10)
-    best_reviews = get_img_review(driver, links)
-    save_xl(links, best_reviews)
+    img_srcs, best_reviews, titles = get_img_review_title(driver, links)
+    save_xl(links, img_srcs, best_reviews, titles)
     print("스크립트 종료")
