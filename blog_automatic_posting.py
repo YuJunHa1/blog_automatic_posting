@@ -7,10 +7,16 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from fake_useragent import UserAgent
 from openpyxl import Workbook, load_workbook
+from openai import OpenAI
+from dotenv import load_dotenv
+load_dotenv("info.env")
 import time
 import random
 import os
 import pyperclip
+
+
+
 
 def chrome_setting():
     chrome_version = random.randint(118, 122)# 고정된 모바일 버전의 User-Agent 패턴 (숫자만 랜덤하게 변경)
@@ -33,22 +39,26 @@ def chrome_setting():
 
 
 # 계정 정보 및 검색어 설정
-ID = "qetu5702@gmail.com"
-PW = "dbwnsgk7575*"
+coupang_id = os.getenv("COUPANG_ID")
+coupang_pw = os.getenv("COUPANG_PW")
+blog_id = os.getenv("BLOG_ID")
+blog_pw = os.getenv("BLOG_PW")
 search_word = "등산복"
-login_page = 'https://login.coupang.com/login/login.pang?rtnUrl=https%3A%2F%2Fpartners.coupang.com%2Fapi%2Fv1%2Fpostlogin'
+coupang_login_page = 'https://login.coupang.com/login/login.pang?rtnUrl=https%3A%2F%2Fpartners.coupang.com%2Fapi%2Fv1%2Fpostlogin'
+blog_login_page = "https://accounts.kakao.com/login/?continue=https%3A%2F%2Fkauth.kakao.com%2Foauth%2Fauthorize%3Fclient_id%3D3e6ddd834b023f24221217e370daed18%26state%3DaHR0cHM6Ly93d3cudGlzdG9yeS5jb20v%26redirect_uri%3Dhttps%253A%252F%252Fwww.tistory.com%252Fauth%252Fkakao%252Fredirect%26response_type%3Dcode%26auth_tran_id%3DBhoCei~O9Hgks4VgSLPBq9Hjr5mUGfg1HpxLI99u1UC5iZlTj1cKhQ11Z5LW%26ka%3Dsdk%252F2.7.3%2520os%252Fjavascript%2520sdk_type%252Fjavascript%2520lang%252Fko-KR%2520device%252FWin32%2520origin%252Fhttps%25253A%25252F%25252Fwww.tistory.com%26is_popup%3Dfalse%26through_account%3Dtrue&talk_login=hidden#login"
+file_path = "C:\\blog_automatic_posting\\blog_automatic_posting.xlsx" #엑셀파일 경로
 
 def login(driver):
     #아이디 넣기
-    driver.get(login_page)
+    driver.get(coupang_login_page)
     login_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "login-email-input")))
     login_box.click()
-    pyperclip.copy(ID)
+    pyperclip.copy(coupang_id)
     login_box.send_keys(Keys.CONTROL, "v")
     #비밀번호 넣기
     pw_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "login-password-input")))
     pw_box.click()
-    pyperclip.copy(PW)
+    pyperclip.copy(coupang_pw)
     pw_box.send_keys(Keys.CONTROL, "v")
     #로그인 버튼 누르기, 실패시 계속 실행행
     while(True):
@@ -140,7 +150,6 @@ def get_title(driver):
 def save_xl(links, img_srcs, best_reviews, titles):
     print("save_xl실행!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1")
     # 엑셀 파일 경로
-    file_path = "C:\\blog_automatic_posting\\blog_automatic_posting.xlsx"
 
     if os.path.exists(file_path):     # 파일이 존재하는지 확인
         wb = load_workbook(file_path) # 파일이 존재하면 열기
@@ -151,7 +160,7 @@ def save_xl(links, img_srcs, best_reviews, titles):
     ws = wb.active
     #1행은 속성 값으로 채우기기
     ws.cell(row=1, column=1, value="item_link")
-    ws.cell(row=1, column=2, value="img_path")
+    ws.cell(row=1, column=2, value="img_src")
     ws.cell(row=1, column=3, value="best_review")
     ws.cell(row=1, column=4, value="title")
 
@@ -167,8 +176,8 @@ def save_xl(links, img_srcs, best_reviews, titles):
     rows_to_delete = []
 
     # 2번째 행부터 데이터 확인 (1번째 행은 헤더)
-    for row in range(4, ws.max_row + 1):
-        titles = ws.cell(row=row, column=1).value  # item_link 컬럼 값 가져오기
+    for row in range(2, ws.max_row + 1):
+        titles = ws.cell(row=row, column=4).value[:8]  # title 컬럼 값 앞 8글자 가져오기, 같은 상품 다른 색상등 거르기 위함
 
         if titles in seen:  # 이미 존재하면 삭제 리스트에 추가
             rows_to_delete.append(row)
@@ -183,6 +192,60 @@ def save_xl(links, img_srcs, best_reviews, titles):
     wb.save(file_path)
     wb.close()
 
+def make_content():
+    wb = load_workbook(file_path)
+    ws = wb.active
+    img_srcs = [cell.value for cell in ws["B"]]
+    img_srcs.pop(0)
+    best_reviews = [cell.value for cell in ws["C"]]
+    best_reviews.pop(0)
+    titles = [cell.value for cell in ws["D"]]
+    titles.pop(0)
+    ws.cell(row=1, column=5, value="contnet")
+    # GPT버전 선택
+    gpt_version = "gpt-4o-mini"
+    # 인증 키 입력
+    os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+    client = OpenAI()
+
+    contents = [] #생성된 글 담을 리스트
+
+    for i in range(len(best_reviews)):
+        query = best_reviews[i] + " 의 내용을 참조해서//" + titles[i] + "제품에 대해 // 20자 미만의 부제목 2개개 뽑아줘."
+        sub_title = client.chat.completions.create(
+            model=gpt_version,
+            messages=[
+            {"role": "developer", "content": "You are a helpful assistant."},
+            {"role": "user", "content": query}
+            ]
+        )
+        sub_title = sub_title.choices[0].message.content
+        sub_titles = sub_title.split("\n") 
+        time.sleep(2)
+
+
+        paragraph = []
+
+        for j in range(len(sub_titles)):
+            query = titles[i] + "에 대해서 //" + best_reviews[i] + "//를 참조해서" + sub_titles[j] + "에 대한 내용을 400자 이내로 써줘."
+            answer_con = client.chat.completions.create(model=gpt_version,messages=[
+            {"role": "developer", "content": "You are a helpful assistant."},
+            {"role": "user", "content": query}])
+            answer_con = answer_con.choices[0].message.content
+            paragraph.append(sub_titles[j] + "\n" + answer_con)
+            
+        content = "\n".join(paragraph)
+        contents.append(content)
+        print(str(i+1) + "번째 글 생성 완료")
+
+    #엑셀에 content 저장하기
+    i=2 #1열은 속성, 2열부터 값 저장
+    for content in contents:
+        ws.cell(row=i, column=5, value=content)
+        i += 1
+    wb.save(file_path)
+    wb.close()
+
 
 if __name__ == "__main__":
     driver = chrome_setting()
@@ -191,4 +254,5 @@ if __name__ == "__main__":
     links = get_link(driver, 10)
     img_srcs, best_reviews, titles = get_img_review_title(driver, links)
     save_xl(links, img_srcs, best_reviews, titles)
+    make_content()
     print("스크립트 종료")
