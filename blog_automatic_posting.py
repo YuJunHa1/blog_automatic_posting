@@ -39,15 +39,28 @@ def chrome_setting():
 
 
 # 계정 정보 및 검색어 설정
-coupang_id = os.getenv("COUPANG_ID")
-coupang_pw = os.getenv("COUPANG_PW")
-blog_id = os.getenv("BLOG_ID")
-blog_pw = os.getenv("BLOG_PW")
-search_word = "등산복"
-coupang_login_page = 'https://login.coupang.com/login/login.pang?rtnUrl=https%3A%2F%2Fpartners.coupang.com%2Fapi%2Fv1%2Fpostlogin'
-blog_login_page = "https://accounts.kakao.com/login/?continue=https%3A%2F%2Fkauth.kakao.com%2Foauth%2Fauthorize%3Fclient_id%3D3e6ddd834b023f24221217e370daed18%26state%3DaHR0cHM6Ly93d3cudGlzdG9yeS5jb20v%26redirect_uri%3Dhttps%253A%252F%252Fwww.tistory.com%252Fauth%252Fkakao%252Fredirect%26response_type%3Dcode%26auth_tran_id%3DBhoCei~O9Hgks4VgSLPBq9Hjr5mUGfg1HpxLI99u1UC5iZlTj1cKhQ11Z5LW%26ka%3Dsdk%252F2.7.3%2520os%252Fjavascript%2520sdk_type%252Fjavascript%2520lang%252Fko-KR%2520device%252FWin32%2520origin%252Fhttps%25253A%25252F%25252Fwww.tistory.com%26is_popup%3Dfalse%26through_account%3Dtrue&talk_login=hidden#login"
-file_path = "C:\\blog_automatic_posting\\blog_automatic_posting.xlsx" #엑셀파일 경로
-
+def info_setting(Coupang_id, Coupang_pw, Blog_id, Blog_pw, Blog_write_page, Search_word,File_path, Api_key):   
+    global coupang_id
+    coupang_id = Coupang_id
+    global coupang_pw
+    coupang_pw = Coupang_pw
+    global coupang_login_page
+    coupang_login_page = "https://login.coupang.com/login/login.pang?rtnUrl=https%3A%2F%2Fpartners.coupang.com%2Fapi%2Fv1%2Fpostlogin"
+    global blog_id
+    blog_id = Blog_id
+    global blog_pw
+    blog_pw = Blog_pw
+    global blog_login_page
+    blog_login_page = "https://accounts.kakao.com/login/?continue=https%3A%2F%2Fkauth.kakao.com%2Foauth%2Fauthorize%3Fclient_id%3D3e6ddd834b023f24221217e370daed18%26state%3DaHR0cHM6Ly93d3cudGlzdG9yeS5jb20v%26redirect_uri%3Dhttps%253A%252F%252Fwww.tistory.com%252Fauth%252Fkakao%252Fredirect%26response_type%3Dcode%26auth_tran_id%3DgV7OKYnobRBgoKqmaIF3mJx6CyGt6CNGY9mYaUXMw5EVwsk2YKrO2bLhOjmw%26ka%3Dsdk%252F2.7.3%2520os%252Fjavascript%2520sdk_type%252Fjavascript%2520lang%252Fko-KR%2520device%252FWin32%2520origin%252Fhttps%25253A%25252F%25252Fwww.tistory.com%26is_popup%3Dfalse%26through_account%3Dtrue&talk_login=hidden#login"
+    global blog_write_page
+    blog_write_page = Blog_write_page
+    global search_word
+    search_word = Search_word
+    global file_path
+    file_path = "C:\\blog_automatic_posting\\blog_automatic_posting.xlsx"
+    global api_key
+    api_key = Api_key
+    
 def login(driver):
     #아이디 넣기
     driver.get(coupang_login_page)
@@ -74,7 +87,6 @@ def search(driver):
     pyperclip.copy(search_word)
     search_box.send_keys(Keys.CONTROL, "v")
     driver.find_element(By.CSS_SELECTOR, ".ant-btn.search-button.ant-btn-primary").click()
-    #WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".ant-btn.hover-btn.btn-generate-link")))
 
 
 def get_link(driver, n): #n개의 상품 링크 가져오기
@@ -148,7 +160,7 @@ def get_title(driver):
 
 #링크, 이미지 경로, 리뷰 엑셀에 저장하기
 def save_xl(links, img_srcs, best_reviews, titles):
-    print("save_xl실행!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1")
+    print("save_xl실행!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     # 엑셀 파일 경로
 
     if os.path.exists(file_path):     # 파일이 존재하는지 확인
@@ -205,7 +217,7 @@ def make_content():
     # GPT버전 선택
     gpt_version = "gpt-4o-mini"
     # 인증 키 입력
-    os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+    os.environ["OPENAI_API_KEY"] = api_key
     client = OpenAI()
 
     contents = [] #생성된 글 담을 리스트
@@ -246,13 +258,80 @@ def make_content():
     wb.save(file_path)
     wb.close()
 
+def write_blog(driver):
 
-if __name__ == "__main__":
+    #엑셀 파일 불러오기
+    wb = load_workbook(file_path)
+    ws = wb.active
+
+    item_links = [cell.value for cell in ws["A"]] #상품 주소
+    item_links.pop(0)
+    contents = [cell.value for cell in ws["E"]] #본문 내용
+    contents.pop(0)
+    img_srcs = [cell.value for cell in ws["B"]] #대표이미지 주소
+    img_srcs.pop(0)
+    titles = [cell.value for cell in ws["D"]] #상품 이름
+    titles.pop(0)
+
+    #로그인
+    driver.get(blog_login_page)
+    login_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "loginId--1")))
+    login_box.click()
+    pyperclip.copy(blog_id)
+    login_box.send_keys(Keys.CONTROL, "v")
+    pw_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "password--2")))
+    pw_box.click()
+    pyperclip.copy(blog_pw)
+    pw_box.send_keys(Keys.CONTROL, "v")
+    driver.find_element(By.CSS_SELECTOR, ".btn_g.highlight.submit").click()
+
+    for i in range(len(contents)):
+        time.sleep(2)
+        driver.get(blog_write_page)
+
+        #글 이어쓰기 alert창 나오면 새로 쓰기
+        try:
+            WebDriverWait(driver, 5).until(EC.alert_is_present())
+            alert = driver.switch_to.alert
+            print("알림창 내용:", alert.text)
+            alert.dismiss()
+            print("알림창 거절")
+        except:
+            print("알림창 없음")
+
+        WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".textarea_tit"))).click()
+        webdriver.ActionChains(driver).send_keys("쿠팡 가성비 " + search_word + " 추천" + titles[i]).perform()
+
+        driver.switch_to.frame("editor-tistory_ifr")
+        WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//p"))).click()
+        webdriver.ActionChains(driver).send_keys(f'이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.\n{item_links[i]}\n').perform()
+        time.sleep(5)
+
+        body = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "tinymce")))
+
+        #sub_title1  \n  content1  \n  sub_title2  \n  contnet2 형식으로 되어있는 글을 4개로 쪼개서 각 sub_title에는 <h4> 태그 씌우기
+        subtitle_content = contents[i].split("\n")
+        # 자바스크립트로 <img> 태그 삽입 (DOM에 직접 넣기)
+        img_src = img_srcs[i]
+        html = f'<p><img src="{img_src}" alt="쿠팡 이미지"></p><p><h4>{subtitle_content[0]}</h4></p><p>{subtitle_content[1]}</p><p><h4>{subtitle_content[2]}</h4></p><p>{subtitle_content[3]}</p>'
+
+        driver.execute_script("arguments[0].insertAdjacentHTML('beforeend', arguments[1]);", body, html)
+        driver.switch_to.default_content()
+        WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".btn.btn-default"))).click()
+        WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, "open20"))).click()
+        WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, "publish-btn"))).click()
+
+
+
+
+def main(Coupang_id, Coupang_pw, Blog_id, Blog_pw, Blog_write_page, Search_word, Post_num, Api_key):
     driver = chrome_setting()
+    info_setting(Coupang_id, Coupang_pw, Blog_id, Blog_pw, Blog_write_page, Search_word, Post_num, Api_key)
     login(driver)
     search(driver)
-    links = get_link(driver, 10)
+    links = get_link(driver, int(Post_num)) #가져올 상위 상품 개수
     img_srcs, best_reviews, titles = get_img_review_title(driver, links)
     save_xl(links, img_srcs, best_reviews, titles)
     make_content()
+    write_blog(driver)
     print("스크립트 종료")

@@ -51,22 +51,36 @@ pyperclip.copy(blog_pw)
 pw_box.send_keys(Keys.CONTROL, "v")
 driver.find_element(By.CSS_SELECTOR, ".btn_g.highlight.submit").click()
 
-WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".thumb_profile"))).click()
-elements = driver.find_elements(By.CSS_SELECTOR, ".img_common_tistory.link_edit")
-elements[2].click()
+time.sleep(5)
+#WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".thumb_profile"))).click()
+driver.get("https://products-recommendation.tistory.com/manage/newpost?type=post&returnURL=%2Fmanage%2Fposts%2F")
 
-time.sleep(2)
-
+# 잠시 대기 후 alert 감지 및 처리
 try:
-    WebDriverWait(driver, 10).until(EC.alert_is_present())  # 팝업이 뜰 때까지 대기
+    WebDriverWait(driver, 2).until(EC.alert_is_present())
     alert = driver.switch_to.alert
-    print("팝업 내용:", alert.text)
-    alert.accept()  # 확인 버튼 클릭
-    print("팝업 확인 클릭 완료!")
+    print("알림창 내용:", alert.text)
+    alert.dismiss()  # 확인 버튼 클릭
+    print("알림창 수락 완료")
 except:
-    print("팝업이 안 떴거나 확인 못 함")
+    print("알림창 없음")
 
-#WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".textarea_tit"))).click()
-#pyperclip.copy("제목제목제목목")
-#login_box.send_keys(Keys.CONTROL, "v")
+WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".textarea_tit"))).click()
+webdriver.ActionChains(driver).send_keys("제목제목제목목").perform()
+
+driver.switch_to.frame("editor-tistory_ifr")
+WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//p"))).click()
+webdriver.ActionChains(driver).send_keys("이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.\nhttps://link.coupang.com/a/cnENdr\n").perform()
+
+body = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "tinymce")))
+
+# 자바스크립트로 <img> 태그 삽입 (DOM에 직접 넣기)
+img_url = "http://thumbnail10.coupangcdn.com/thumbnails/remote/292x292ex/image/vendor_inventory/f946/97b84ec7d4b48c3b6fa58a9dbf36fb7c41c152cf18eada1c4f565c6248c1.jpg"
+img_html = f'<p><img src="{img_url}" alt="쿠팡 이미지"></p><p>이건 이미지 아래에 들어가는 설명입니다.</p>'
+
+driver.execute_script("arguments[0].insertAdjacentHTML('beforeend', arguments[1]);", body, img_html)
+driver.switch_to.default_content()
+WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".btn.btn-default"))).click()
+WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, "open20"))).click()
+WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, "publish-btn"))).click()
 
